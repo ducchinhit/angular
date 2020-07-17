@@ -1,14 +1,13 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
 import {$, by, element} from 'protractor';
-import {openBrowser, verifyNoBrowserErrors} from '../../../e2e_util/e2e_util';
-import {runBenchmark} from '../../../e2e_util/perf_util';
+import {openBrowser, runBenchmark, verifyNoBrowserErrors} from '../../../../dev-infra/benchmark/driver-utilities';
 
 /** List of possible scenarios that should be tested.  */
 const SCENARIOS = [
@@ -28,57 +27,57 @@ const SCENARIOS = [
 describe('styling benchmark spec', () => {
   afterEach(verifyNoBrowserErrors);
 
-  it('should render and interact to update and detect changes', () => {
+  it('should render and interact to update and detect changes', async () => {
     openBrowser({url: '/', ignoreBrowserSynchronization: true});
     create();
     const items = element.all(by.css('styling-bindings button'));
-    expect(items.count()).toBe(2000);
-    expect(items.first().getAttribute('title')).toBe('bar');
+    expect(await items.count()).toBe(2000);
+    expect(await items.first().getAttribute('title')).toBe('bar');
     update();
-    expect(items.first().getAttribute('title')).toBe('baz');
+    expect(await items.first().getAttribute('title')).toBe('baz');
   });
 
-  it('should render and run noop change detection', () => {
+  it('should render and run noop change detection', async () => {
     openBrowser({url: '/', ignoreBrowserSynchronization: true});
     create();
     const items = element.all(by.css('styling-bindings button'));
-    expect(items.count()).toBe(2000);
-    expect(items.first().getAttribute('title')).toBe('bar');
+    expect(await items.count()).toBe(2000);
+    expect(await items.first().getAttribute('title')).toBe('bar');
     detectChanges();
-    expect(items.first().getAttribute('title')).toBe('bar');
+    expect(await items.first().getAttribute('title')).toBe('bar');
   });
 
   // Create benchmarks for each possible test scenario.
   SCENARIOS.forEach(({optionIndex, id}) => {
     describe(id, () => {
-      it('should run create benchmark', done => {
-        runStylingBenchmark(`styling.${id}.create`, {
+      it('should run create benchmark', async () => {
+        await runStylingBenchmark(`styling.${id}.create`, {
           work: () => create(),
           prepare: () => {
             selectScenario(optionIndex);
             destroy();
           },
-        }).then(done, done.fail);
+        });
       });
 
-      it('should run update benchmark', done => {
-        runStylingBenchmark(`styling.${id}.update`, {
+      it('should run update benchmark', async () => {
+        await runStylingBenchmark(`styling.${id}.update`, {
           work: () => update(),
           prepare: () => {
             selectScenario(optionIndex);
             create();
           },
-        }).then(done, done.fail);
+        });
       });
 
-      it('should run detect changes benchmark', done => {
-        runStylingBenchmark(`styling.${id}.noop_cd`, {
+      it('should run detect changes benchmark', async () => {
+        await runStylingBenchmark(`styling.${id}.noop_cd`, {
           work: () => detectChanges(),
           prepare: () => {
             selectScenario(optionIndex);
             create();
           },
-        }).then(done, done.fail);
+        });
       });
     });
   });

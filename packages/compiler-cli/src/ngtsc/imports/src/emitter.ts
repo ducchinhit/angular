@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -9,10 +9,10 @@ import {Expression, ExternalExpr, ExternalReference, WrappedNodeExpr} from '@ang
 import * as ts from 'typescript';
 
 import {UnifiedModulesHost} from '../../core/api';
-import {LogicalFileSystem, LogicalProjectPath, PathSegment, absoluteFromSourceFile, dirname, relative} from '../../file_system';
+import {absoluteFromSourceFile, dirname, LogicalFileSystem, LogicalProjectPath, relative, toRelativeImport} from '../../file_system';
 import {stripExtension} from '../../file_system/src/util';
 import {ReflectionHost} from '../../reflection';
-import {getSourceFile, isDeclaration, nodeNameForError} from '../../util/src/typescript';
+import {getSourceFile, isDeclaration, isTypeDeclaration, nodeNameForError} from '../../util/src/typescript';
 
 import {findExportedNameOfNode} from './find_export';
 import {Reference} from './references';
@@ -40,6 +40,15 @@ export enum ImportFlags {
    * into TypeScript and type-checked (such as in template type-checking).
    */
   NoAliasing = 0x02,
+
+  /**
+   * Indicates that an import to a type-only declaration is allowed.
+   *
+   * For references that occur in type-positions, the referred declaration may be a type-only
+   * declaration that is not retained during emit. Including this flag allows to emit references to
+   * type-only declarations as used in e.g. template type-checking.
+   */
+  AllowTypeImports = 0x04,
 }
 
 /**
@@ -61,7 +70,7 @@ export interface ReferenceEmitStrategy {
    *
    * @param ref the `Reference` for which to generate an expression
    * @param context the source file in which the `Expression` must be valid
-   * @param importMode a flag which controls whether imports should be generated or not
+   * @param importFlags a flag which controls whether imports should be generated or not
    * @returns an `Expression` which refers to the `Reference`, or `null` if none can be generated
    */
   emit(ref: Reference, context: ts.SourceFile, importFlags: ImportFlags): Expression|null;
@@ -84,8 +93,8 @@ export class ReferenceEmitter {
         return emitted;
       }
     }
-    throw new Error(
-        `Unable to write a reference to ${nodeNameForError(ref.node)} in ${ref.node.getSourceFile().fileName} from ${context.fileName}`);
+    throw new Error(`Unable to write a reference to ${nodeNameForError(ref.node)} in ${
+        ref.node.getSourceFile().fileName} from ${context.fileName}`);
   }
 }
 
@@ -133,14 +142,18 @@ export class AbsoluteModuleStrategy implements ReferenceEmitStrategy {
       protected program: ts.Program, protected checker: ts.TypeChecker,
       protected moduleResolver: ModuleResolver, private reflectionHost: ReflectionHost) {}
 
-  emit(ref: Reference<ts.Node>, context: ts.SourceFile): Expression|null {
+  emit(ref: Reference<ts.Node>, context: ts.SourceFile, importFlags: ImportFlags): Expression|null {
     if (ref.bestGuessOwningModule === null) {
       // There is no module name available for this Reference, meaning it was arrived at via a
       // relative path.
       return null;
     } else if (!isDeclaration(ref.node)) {
       // It's not possible to import something which isn't a declaration.
-      throw new Error('Debug assert: importing a Reference to non-declaration?');
+      throw new Error(`Debug assert: unable to import a Reference to non-declaration of type ${
+          ts.SyntaxKind[ref.node.kind]}.`);
+    } else if ((importFlags & ImportFlags.AllowTypeImports) === 0 && isTypeDeclaration(ref.node)) {
+      throw new Error(`Importing a type-only declaration of type ${
+          ts.SyntaxKind[ref.node.kind]} in a value position is not allowed.`);
     }
 
     // Try to find the exported name of the declaration, if one is available.
@@ -149,8 +162,9 @@ export class AbsoluteModuleStrategy implements ReferenceEmitStrategy {
     if (symbolName === null) {
       // TODO(alxhub): make this error a ts.Diagnostic pointing at whatever caused this import to be
       // triggered.
-      throw new Error(
-          `Symbol ${ref.debugName} declared in ${getSourceFile(ref.node).fileName} is not exported from ${specifier} (import into ${context.fileName})`);
+      throw new Error(`Symbol ${ref.debugName} declared in ${
+          getSourceFile(ref.node).fileName} is not exported from ${specifier} (import into ${
+          context.fileName})`);
     }
 
     return new ExternalExpr(new ExternalReference(specifier, symbolName));
@@ -160,7 +174,7 @@ export class AbsoluteModuleStrategy implements ReferenceEmitStrategy {
       |null {
     const exports = this.getExportsOfModule(moduleName, fromFile);
     if (exports !== null && exports.has(target)) {
-      return exports.get(target) !;
+      return exports.get(target)!;
     } else {
       return null;
     }
@@ -171,7 +185,7 @@ export class AbsoluteModuleStrategy implements ReferenceEmitStrategy {
     if (!this.moduleExportsCache.has(moduleName)) {
       this.moduleExportsCache.set(moduleName, this.enumerateExportsOfModule(moduleName, fromFile));
     }
-    return this.moduleExportsCache.get(moduleName) !;
+    return this.moduleExportsCache.get(moduleName)!;
   }
 
   protected enumerateExportsOfModule(specifier: string, fromFile: string):
@@ -255,11 +269,9 @@ export class RelativePathStrategy implements ReferenceEmitStrategy {
 
   emit(ref: Reference<ts.Node>, context: ts.SourceFile): Expression|null {
     const destSf = getSourceFile(ref.node);
-    let moduleName = stripExtension(
-        relative(dirname(absoluteFromSourceFile(context)), absoluteFromSourceFile(destSf)));
-    if (!moduleName.startsWith('../')) {
-      moduleName = ('./' + moduleName) as PathSegment;
-    }
+    const relativePath =
+        relative(dirname(absoluteFromSourceFile(context)), absoluteFromSourceFile(destSf));
+    const moduleName = toRelativeImport(stripExtension(relativePath));
 
     const name = findExportedNameOfNode(ref.node, destSf, this.reflector);
     return new ExternalExpr({moduleName, name});

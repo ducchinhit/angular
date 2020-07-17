@@ -2,7 +2,13 @@
 
 _Angular elements_ are Angular components packaged as _custom elements_ (also called Web Components), a web standard for defining new HTML elements in a framework-agnostic way.
 
-[Custom elements](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_custom_elements) are a Web Platform feature currently supported by Chrome, Firefox, Opera, and Safari, and available in other browsers through polyfills (see [Browser Support](#browser-support)).
+<div class="alert is-helpful">
+
+  For the sample app that this page describes, see the <live-example></live-example>.
+
+</div>
+
+[Custom elements](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_custom_elements) are a Web Platform feature currently supported by Chrome, Edge (Chromium-based), Firefox, Opera, and Safari, and available in other browsers through polyfills (see [Browser Support](#browser-support)).
 A custom element extends HTML by allowing you to define a tag whose content is created and controlled by JavaScript code.
 The browser maintains a `CustomElementRegistry` of defined custom elements, which maps an instantiable JavaScript class to an HTML tag.
 
@@ -82,7 +88,7 @@ For more information, see Web Component documentation for [Creating custom event
 
 ## Browser support for custom elements
 
-The recently-developed [custom elements](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_custom_elements) Web Platform feature is currently supported natively in a number of browsers. Support is pending or planned in other browsers.
+The recently-developed [custom elements](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_custom_elements) Web Platform feature is currently supported natively in a number of browsers.
 
 <table>
 <tr>
@@ -94,11 +100,7 @@ The recently-developed [custom elements](https://developer.mozilla.org/en-US/doc
   <td>Supported natively.</td>
 </tr>
 <tr>
-  <td>Opera</td>
-  <td>Supported natively.</td>
-</tr>
-<tr>
-  <td>Safari</td>
+  <td>Edge (Chromium-based)</td>
   <td>Supported natively.</td>
 </tr>
 <tr>
@@ -106,16 +108,18 @@ The recently-developed [custom elements](https://developer.mozilla.org/en-US/doc
   <td>Supported natively.</td>
 </tr>
 <tr>
-  <td>Edge</td>
-  <td>Working on an implementation. <br>
-
-  </td>
+  <td>Opera</td>
+  <td>Supported natively.</td>
+</tr>
+<tr>
+  <td>Safari</td>
+  <td>Supported natively.</td>
 </tr>
 </table>
 
-In browsers that support Custom Elements natively, the specification requires developers use ES2015 classes to define Custom Elements - developers can opt-in to this by setting the `target: "es2015"` property in their project's `tsconfig.json`. As Custom Element and ES2015 support may not be available in all browsers, developers can instead choose to use a polyfill to support older browsers and ES5 code.
+In browsers that support Custom Elements natively, the specification requires developers use ES2015 classes to define Custom Elements - developers can opt-in to this by setting the `target: "es2015"` property in their project's [TypeScript configuration file](/guide/typescript-configuration). As Custom Element and ES2015 support may not be available in all browsers, developers can instead choose to use a polyfill to support older browsers and ES5 code.
 
-Use the [Angular CLI](cli) to automatically set up your project with the correct polyfill: `ng add @angular/elements --name=*your_project_name*`.
+Use the [Angular CLI](cli) to automatically set up your project with the correct polyfill: `ng add @angular/elements --project=*your_project_name*`.
 - For more information about polyfills, see [polyfill documentation](https://www.webcomponents.org/polyfills).
 
 - For more information about Angular browser support, see [Browser Support](guide/browser-support).
@@ -155,12 +159,6 @@ For comparison, the demo shows both methods. One button adds the popup using the
   </code-pane>
 </code-tabs>
 
-<!--
-  StackBlitz transpiles code to ES5. The live example will not work without a polyfill.
-  Only offer a `.zip` to download for now.
--->
-You can download the full code for the example <live-example downloadOnly>here</live-example>.
-
 
 ## Typings for custom elements
 
@@ -188,7 +186,7 @@ aDialog.content = 123;  // <-- ERROR: TypeScript knows this should be a string.
 aDialog.body = 'News';  // <-- ERROR: TypeScript knows there is no `body` property on `aDialog`.
 ```
 
-This is a good way to quickly get TypeScript features, such as type checking and autocomplete support, for you custom element. But it can get cumbersome if you need it in several places, because you have to cast the return type on every occurrence.
+This is a good way to quickly get TypeScript features, such as type checking and autocomplete support, for your custom element. But it can get cumbersome if you need it in several places, because you have to cast the return type on every occurrence.
 
 An alternative way, that only requires defining each custom element's type once, is augmenting the `HTMLElementTagNameMap`, which TypeScript uses to infer the type of a returned element based on its tag name (for DOM methods such as `document.createElement()`, `document.querySelector()`, etc.):
 

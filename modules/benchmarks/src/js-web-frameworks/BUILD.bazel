@@ -5,9 +5,10 @@ package(default_visibility = ["//visibility:public"])
 ts_library(
     name = "perf_lib",
     testonly = True,
-    srcs = ["perf.spec.ts"],
+    srcs = ["js-web-frameworks.perf-spec.ts"],
+    tsconfig = "//modules/benchmarks:tsconfig-e2e.json",
     deps = [
-        "//modules/e2e_util",
+        "//dev-infra/benchmark/driver-utilities",
         "@npm//protractor",
     ],
 )

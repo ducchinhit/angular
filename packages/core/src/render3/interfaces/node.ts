@@ -1,13 +1,14 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
-import {ArrayMap} from '../../util/array_utils';
+import {KeyValueArray} from '../../util/array_utils';
 import {TStylingRange} from '../interfaces/styling';
 
+import {DirectiveDef} from './definition';
 import {CssSelector} from './projection';
 import {RNode} from './renderer';
 import {LView, TView} from './view';
@@ -89,8 +90,10 @@ export const enum TNodeProviderIndexes {
   /** The index of the first provider on this node is encoded on the least significant bits */
   ProvidersStartIndexMask = 0b00000000000000001111111111111111,
 
-  /** The count of view providers from the component on this node is encoded on the 16 most
-     significant bits */
+  /**
+     The count of view providers from the component on this node is encoded on the 16 most
+     significant bits
+   */
   CptViewProvidersCountShift = 16,
   CptViewProvidersCountShifter = 0b00000000000000010000000000000000,
 }
@@ -116,21 +119,21 @@ export const enum AttributeMarker {
   NamespaceURI = 0,
 
   /**
-    * Signals class declaration.
-    *
-    * Each value following `Classes` designates a class name to include on the element.
-    * ## Example:
-    *
-    * Given:
-    * ```
-    * <div class="foo bar baz">...<d/vi>
-    * ```
-    *
-    * the generated code is:
-    * ```
-    * var _c1 = [AttributeMarker.Classes, 'foo', 'bar', 'baz'];
-    * ```
-    */
+   * Signals class declaration.
+   *
+   * Each value following `Classes` designates a class name to include on the element.
+   * ## Example:
+   *
+   * Given:
+   * ```
+   * <div class="foo bar baz">...<d/vi>
+   * ```
+   *
+   * the generated code is:
+   * ```
+   * var _c1 = [AttributeMarker.Classes, 'foo', 'bar', 'baz'];
+   * ```
+   */
   Classes = 1,
 
   /**
@@ -234,14 +237,14 @@ export const enum AttributeMarker {
  * - Special markers acting as flags to alter attributes processing.
  * - Parsed ngProjectAs selectors.
  */
-export type TAttributes = (string | AttributeMarker | CssSelector)[];
+export type TAttributes = (string|AttributeMarker|CssSelector)[];
 
 /**
  * Constants that are associated with a view. Includes:
  * - Attribute arrays.
  * - Local definition arrays.
  */
-export type TConstants = (TAttributes | string)[];
+export type TConstants = (TAttributes|string)[];
 
 /**
  * Binding data (flyweight) for a particular node that is shared between all templates
@@ -292,6 +295,24 @@ export interface TNode {
    * Stores final exclusive index of the directives.
    */
   directiveEnd: number;
+
+  /**
+   * Stores the last directive which had a styling instruction.
+   *
+   * Initial value of this is `-1` which means that no `hostBindings` styling instruction has
+   * executed. As `hostBindings` instructions execute they set the value to the index of the
+   * `DirectiveDef` which contained the last `hostBindings` styling instruction.
+   *
+   * Valid values are:
+   * - `-1` No `hostBindings` instruction has executed.
+   * - `directiveStart <= directiveStylingLast < directiveEnd`: Points to the `DirectiveDef` of the
+   *   last styling instruction which executed in the `hostBindings`.
+   *
+   * This data is needed so that styling instructions know which static styling data needs to be
+   * collected from the `DirectiveDef.hostAttrs`. A styling instruction needs to collect all data
+   * since last styling instruction.
+   */
+  directiveStylingLast: number;
 
   /**
    * Stores indexes of property bindings. This field is only set in the ngDevMode and holds indexes
@@ -481,50 +502,93 @@ export interface TNode {
   projection: (TNode|RNode[])[]|number|null;
 
   /**
-   * A collection of all style bindings and/or static style values for an element.
+   * A collection of all `style` static values for an element (including from host).
    *
    * This field will be populated if and when:
    *
-   * - There are one or more initial styles on an element (e.g. `<div style="width:200px">`)
+   * - There are one or more initial `style`s on an element (e.g. `<div style="width:200px;">`)
+   * - There are one or more initial `style`s on a directive/component host
+   *   (e.g. `@Directive({host: {style: "width:200px;" } }`)
    */
   styles: string|null;
 
+
   /**
-   * An `ArrayMap` version of `styles.
+   * A collection of all `style` static values for an element excluding host sources.
    *
-   * We need this when style bindings are resolving. This gets populated only if there are styling
-   * binding instructions. The laziness is important since we don't want to allocate the memory
-   * because most styling is static. For tree shaking purposes the code to create these only comes
-   * with styling.
+   * Populated when there are one or more initial `style`s on an element
+   * (e.g. `<div style="width:200px;">`)
+   * Must be stored separately from `tNode.styles` to facilitate setting directive
+   * inputs that shadow the `style` property. If we used `tNode.styles` as is for shadowed inputs,
+   * we would feed host styles back into directives as "inputs". If we used `tNode.attrs`, we would
+   * have to concatenate the attributes on every template pass. Instead, we process once on first
+   * create pass and store here.
+   */
+  stylesWithoutHost: string|null;
+
+  /**
+   * A `KeyValueArray` version of residual `styles`.
+   *
+   * When there are styling instructions than each instruction stores the static styling
+   * which is of lower priority than itself. This means that there may be a higher priority styling
+   * than the instruction.
+   *
+   * Imagine:
+   * ```
+   * <div style="color: highest;" my-dir>
+   *
+   * @Directive({
+   *   host: {
+   *     style: 'color: lowest; ',
+   *     '[styles.color]': 'exp' // ɵɵstyleProp('color', ctx.exp);
+   *   }
+   * })
+   * ```
+   *
+   * In the above case:
+   * - `color: lowest` is stored with `ɵɵstyleProp('color', ctx.exp);` instruction
+   * -  `color: highest` is the residual and is stored here.
    *
    * - `undefined': not initialized.
    * - `null`: initialized but `styles` is `null`
-   * - `ArrayMap`: parsed version of `styles`.
+   * - `KeyValueArray`: parsed version of `styles`.
    */
-  stylesMap: ArrayMap<any>|undefined|null;
+  residualStyles: KeyValueArray<any>|undefined|null;
 
   /**
-   * A collection of all class bindings and/or static class values for an element.
+   * A collection of all class static values for an element (including from host).
    *
    * This field will be populated if and when:
    *
    * - There are one or more initial classes on an element (e.g. `<div class="one two three">`)
+   * - There are one or more initial classes on an directive/component host
+   *   (e.g. `@Directive({host: {class: "SOME_CLASS" } }`)
    */
   classes: string|null;
 
   /**
-   * An `ArrayMap` version of `classes`.
+   * A collection of all class static values for an element excluding host sources.
    *
-   * We need this when style bindings are resolving. This gets populated only if there are styling
-   * binding instructions. The laziness is important since we don't want to allocate the memory
-   * because most styling is static. For tree shaking purposes the code to create these only comes
-   * with styling.
+   * Populated when there are one or more initial classes on an element
+   * (e.g. `<div class="SOME_CLASS">`)
+   * Must be stored separately from `tNode.classes` to facilitate setting directive
+   * inputs that shadow the `class` property. If we used `tNode.classes` as is for shadowed inputs,
+   * we would feed host classes back into directives as "inputs". If we used `tNode.attrs`, we would
+   * have to concatenate the attributes on every template pass. Instead, we process once on first
+   * create pass and store here.
+   */
+  classesWithoutHost: string|null;
+
+  /**
+   * A `KeyValueArray` version of residual `classes`.
+   *
+   * Same as `TNode.residualStyles` but for classes.
    *
    * - `undefined': not initialized.
    * - `null`: initialized but `classes` is `null`
-   * - `ArrayMap`: parsed version of `S`.
+   * - `KeyValueArray`: parsed version of `classes`.
    */
-  classesMap: ArrayMap<any>|undefined|null;
+  residualClasses: KeyValueArray<any>|undefined|null;
 
   /**
    * Stores the head/tail index of the class bindings.
@@ -669,7 +733,7 @@ export interface TProjectionNode extends TNode {
 /**
  * A union type representing all TNode types that can host a directive.
  */
-export type TDirectiveHostNode = TElementNode | TContainerNode | TElementContainerNode;
+export type TDirectiveHostNode = TElementNode|TContainerNode|TElementContainerNode;
 
 /**
  * This mapping is necessary so we can set input properties and output listeners
@@ -694,7 +758,7 @@ export type PropertyAliases = {
  *
  * e.g. [0, 'change-minified']
  */
-export type PropertyAliasValue = (number | string)[];
+export type PropertyAliasValue = (number|string)[];
 
 /**
  * This array contains information about input properties that
@@ -714,7 +778,7 @@ export type PropertyAliasValue = (number | string)[];
  *
  * e.g. [null, ['role-min', 'minified-input', 'button']]
  */
-export type InitialInputData = (InitialInputs | null)[];
+export type InitialInputData = (InitialInputs|null)[];
 
 /**
  * Used by InitialInputData to store input properties
@@ -735,7 +799,7 @@ export const unusedValueExportToPlacateAjd = 1;
 /**
  * Type representing a set of TNodes that can have local refs (`#foo`) placed on them.
  */
-export type TNodeWithLocalRefs = TContainerNode | TElementNode | TElementContainerNode;
+export type TNodeWithLocalRefs = TContainerNode|TElementNode|TElementContainerNode;
 
 /**
  * Type for a function that extracts a value for a local refs.

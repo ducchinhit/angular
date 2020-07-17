@@ -1,4 +1,4 @@
-# Copyright Google Inc. All Rights Reserved.
+# Copyright Google LLC All Rights Reserved.
 #
 # Use of this source code is governed by an MIT-style license that can be
 # found in the LICENSE file at https://angular.io/license
@@ -29,11 +29,11 @@ def rules_angular_dev_dependencies():
     _maybe(
         http_archive,
         name = "bazel_toolchains",
-        sha256 = "a653c9d318e42b14c0ccd7ac50c4a2a276c0db1e39743ab88b5aa2f0bc9cf607",
-        strip_prefix = "bazel-toolchains-2.0.2",
+        sha256 = "db48eed61552e25d36fe051a65d2a329cc0fb08442627e8f13960c5ab087a44e",
+        strip_prefix = "bazel-toolchains-3.2.0",
         urls = [
-            "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/releases/download/2.0.2/bazel-toolchains-2.0.2.tar.gz",
-            "https://github.com/bazelbuild/bazel-toolchains/releases/download/2.0.2/bazel-toolchains-2.0.2.tar.gz",
+            "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/releases/download/3.2.0/bazel-toolchains-3.2.0.tar.gz",
+            "https://github.com/bazelbuild/bazel-toolchains/releases/download/3.2.0/bazel-toolchains-3.2.0.tar.gz",
         ],
     )
 

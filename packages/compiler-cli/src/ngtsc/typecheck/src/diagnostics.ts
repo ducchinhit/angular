@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -8,7 +8,6 @@
 import {AbsoluteSourceSpan, ParseSourceSpan} from '@angular/compiler';
 import * as ts from 'typescript';
 
-import {ErrorCode, ngErrorCode} from '../../diagnostics';
 import {getTokenAtPosition} from '../../util/src/typescript';
 
 import {ExternalTemplateSourceMapping, TemplateId, TemplateSourceMapping} from './api';
@@ -71,7 +70,7 @@ export function ignoreDiagnostics(node: ts.Node): void {
  * Adds a synthetic comment to the expression that represents the parse span of the provided node.
  * This comment can later be retrieved as trivia of a node to recover original source locations.
  */
-export function addParseSpanInfo(node: ts.Node, span: AbsoluteSourceSpan | ParseSourceSpan): void {
+export function addParseSpanInfo(node: ts.Node, span: AbsoluteSourceSpan|ParseSourceSpan): void {
   let commentText: string;
   if (span instanceof AbsoluteSourceSpan) {
     commentText = `${span.start},${span.end}`;
@@ -146,7 +145,7 @@ export function translateDiagnostic(
  */
 export function makeTemplateDiagnostic(
     mapping: TemplateSourceMapping, span: ParseSourceSpan, category: ts.DiagnosticCategory,
-    code: ErrorCode, messageText: string | ts.DiagnosticMessageChain, relatedMessage?: {
+    code: number, messageText: string|ts.DiagnosticMessageChain, relatedMessage?: {
       text: string,
       span: ParseSourceSpan,
     }): TemplateDiagnostic {
@@ -167,11 +166,14 @@ export function makeTemplateDiagnostic(
     // directly into the bytes of the source file.
     return {
       source: 'ngtsc',
-      code: ngErrorCode(code), category, messageText,
+      code,
+      category,
+      messageText,
       file: mapping.node.getSourceFile(),
       componentFile: mapping.node.getSourceFile(),
       start: span.start.offset,
-      length: span.end.offset - span.start.offset, relatedInformation,
+      length: span.end.offset - span.start.offset,
+      relatedInformation,
     };
   } else if (mapping.type === 'indirect' || mapping.type === 'external') {
     // For indirect mappings (template was declared inline, but ngtsc couldn't map it directly
@@ -216,7 +218,8 @@ export function makeTemplateDiagnostic(
     return {
       source: 'ngtsc',
       category,
-      code: ngErrorCode(code), messageText,
+      code,
+      messageText,
       file: sf,
       componentFile: componentSf,
       start: span.start.offset,

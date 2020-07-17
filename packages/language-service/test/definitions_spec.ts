@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -22,7 +22,9 @@ describe('definitions', () => {
   const ngHost = new TypeScriptServiceHost(mockHost, service);
   const ngService = createLanguageService(ngHost);
 
-  beforeEach(() => { mockHost.reset(); });
+  beforeEach(() => {
+    mockHost.reset();
+  });
 
   it('should be able to find field in an interpolation', () => {
     const fileName = mockHost.addCode(`
@@ -36,12 +38,12 @@ describe('definitions', () => {
     const marker = mockHost.getReferenceMarkerFor(fileName, 'name');
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     expect(textSpan).toEqual(marker);
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const def = definitions ![0];
+    expect(definitions!.length).toBe(1);
+    const def = definitions![0];
 
     expect(def.fileName).toBe(fileName);
     expect(def.name).toBe('name');
@@ -55,30 +57,27 @@ describe('definitions', () => {
     const marker = mockHost.getReferenceMarkerFor(TEST_TEMPLATE, 'title');
     const result = ngService.getDefinitionAndBoundSpan(TEST_TEMPLATE, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     expect(textSpan).toEqual(marker);
     expect(definitions).toBeDefined();
 
-    // There are exactly two, indentical definitions here, corresponding to the "name" on the
-    // property and event bindings of the two-way binding. The two-way binding is effectively
-    // syntactic sugar for `[ngModel]="name" (ngModel)="name=$event"`.
-    expect(definitions !.length).toBe(2);
-    for (const def of definitions !) {
-      expect(def.fileName).toBe(PARSING_CASES);
-      expect(def.name).toBe('title');
-      expect(def.kind).toBe('property');
+    expect(definitions!.length).toBe(1);
+    const def = definitions![0];
 
-      const fileContent = mockHost.readFile(def.fileName);
-      expect(fileContent !.substring(def.textSpan.start, def.textSpan.start + def.textSpan.length))
-          .toEqual(`title = 'Some title';`);
-    }
+    expect(def.fileName).toBe(PARSING_CASES);
+    expect(def.name).toBe('title');
+    expect(def.kind).toBe('property');
+
+    const fileContent = mockHost.readFile(def.fileName);
+    expect(fileContent!.substring(def.textSpan.start, def.textSpan.start + def.textSpan.length))
+        .toEqual(`title = 'Tour of Heroes';`);
   });
 
   it('should be able to find a method from a call', () => {
     const fileName = mockHost.addCode(`
       @Component({
-        template: '<div (click)="~{start-my}«myClick»()~{end-my};"></div>'
+        template: '<div (click)="«myClick»();"></div>'
       })
       export class MyComponent {
         «ᐱmyClickᐱ() { }»
@@ -87,12 +86,12 @@ describe('definitions', () => {
     const marker = mockHost.getReferenceMarkerFor(fileName, 'myClick');
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
-    expect(textSpan).toEqual(mockHost.getLocationMarkerFor(fileName, 'my'));
+    expect(textSpan).toEqual(marker);
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const def = definitions ![0];
+    expect(definitions!.length).toBe(1);
+    const def = definitions![0];
 
     expect(def.fileName).toBe(fileName);
     expect(def.name).toBe('myClick');
@@ -112,12 +111,12 @@ describe('definitions', () => {
     const marker = mockHost.getReferenceMarkerFor(fileName, 'include');
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     expect(textSpan).toEqual(marker);
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const def = definitions ![0];
+    expect(definitions!.length).toBe(1);
+    const def = definitions![0];
 
     expect(def.fileName).toBe(fileName);
     expect(def.name).toBe('include');
@@ -137,7 +136,7 @@ describe('definitions', () => {
 
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     // Get the marker for bounded text in the code added above.
     const boundedText = mockHost.getLocationMarkerFor(fileName, 'my');
@@ -145,14 +144,14 @@ describe('definitions', () => {
 
     // There should be exactly 1 definition
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const def = definitions ![0];
+    expect(definitions!.length).toBe(1);
+    const def = definitions![0];
 
     const refFileName = '/app/parsing-cases.ts';
     expect(def.fileName).toBe(refFileName);
     expect(def.name).toBe('TestComponent');
     expect(def.kind).toBe('component');
-    const content = mockHost.readFile(refFileName) !;
+    const content = mockHost.readFile(refFileName)!;
     const begin = '/*BeginTestComponent*/ ';
     const start = content.indexOf(begin) + begin.length;
     const end = content.indexOf(' /*EndTestComponent*/');
@@ -174,7 +173,7 @@ describe('definitions', () => {
 
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     // Get the marker for bounded text in the code added above
     const boundedText = mockHost.getLocationMarkerFor(fileName, 'my');
@@ -182,14 +181,14 @@ describe('definitions', () => {
 
     // There should be exactly 1 definition
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const def = definitions ![0];
+    expect(definitions!.length).toBe(1);
+    const def = definitions![0];
 
     const refFileName = '/app/parsing-cases.ts';
     expect(def.fileName).toBe(refFileName);
     expect(def.name).toBe('testEvent');
     expect(def.kind).toBe('event');
-    const content = mockHost.readFile(refFileName) !;
+    const content = mockHost.readFile(refFileName)!;
     const ref = `@Output('test') testEvent = new EventEmitter();`;
     expect(def.textSpan).toEqual({
       start: content.indexOf(ref),
@@ -211,7 +210,7 @@ describe('definitions', () => {
 
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     // Get the marker for bounded text in the code added above
     const boundedText = mockHost.getLocationMarkerFor(fileName, 'my');
@@ -219,14 +218,14 @@ describe('definitions', () => {
 
     // There should be exactly 1 definition
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const def = definitions ![0];
+    expect(definitions!.length).toBe(1);
+    const def = definitions![0];
 
     const refFileName = '/app/parsing-cases.ts';
     expect(def.fileName).toBe(refFileName);
     expect(def.name).toBe('name');
     expect(def.kind).toBe('property');
-    const content = mockHost.readFile(refFileName) !;
+    const content = mockHost.readFile(refFileName)!;
     const ref = `@Input('tcName') name = 'test';`;
     expect(def.textSpan).toEqual({
       start: content.indexOf(ref),
@@ -237,32 +236,51 @@ describe('definitions', () => {
   it('should be able to find a pipe', () => {
     const fileName = mockHost.addCode(`
       @Component({
-        template: '<div *ngIf="~{start-my}input | «async»~{end-my}"></div>'
+        template: '<div *ngIf="input | «async»"></div>'
       })
       export class MyComponent {
         input: EventEmitter;
       }`);
 
-    // Get the marker for «test» in the code added above.
+    // Get the marker for «async» in the code added above.
     const marker = mockHost.getReferenceMarkerFor(fileName, 'async');
-
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
-    expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
 
-    // Get the marker for bounded text in the code added above
-    const boundedText = mockHost.getLocationMarkerFor(fileName, 'my');
-    expect(textSpan).toEqual(boundedText);
+    expect(result).toBeDefined();
+    const {textSpan, definitions} = result!;
+    expect(textSpan).toEqual(marker);
 
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(4);
+    expect(definitions!.length).toBe(4);
 
     const refFileName = '/node_modules/@angular/common/common.d.ts';
-    for (const def of definitions !) {
+    for (const def of definitions!) {
       expect(def.fileName).toBe(refFileName);
       expect(def.name).toBe('async');
       expect(def.kind).toBe('pipe');
       // Not asserting the textSpan of definition because it's external file
+    }
+  });
+
+  // https://github.com/angular/vscode-ng-language-service/issues/677
+  it('should be able to find a pipe with arguments', () => {
+    mockHost.override(TEST_TEMPLATE, `{{birthday | «date»: "MM/dd/yy"}}`);
+
+    const marker = mockHost.getReferenceMarkerFor(TEST_TEMPLATE, 'date');
+    const result = ngService.getDefinitionAndBoundSpan(TEST_TEMPLATE, marker.start);
+
+    expect(result).toBeDefined();
+    const {textSpan, definitions} = result!;
+    expect(textSpan).toEqual(marker);
+
+    expect(definitions).toBeDefined();
+    expect(definitions!.length).toBe(1);
+
+    const refFileName = '/node_modules/@angular/common/common.d.ts';
+    for (const def of definitions!) {
+      expect(def.fileName).toBe(refFileName);
+      expect(def.name).toBe('date');
+      expect(def.kind).toBe('pipe');
     }
   });
 
@@ -276,17 +294,17 @@ describe('definitions', () => {
 
       const result = ngService.getDefinitionAndBoundSpan(TEST_TEMPLATE, marker.start);
       expect(result).toBeDefined();
-      const {textSpan, definitions} = result !;
+      const {textSpan, definitions} = result!;
 
       // Get the marker for bounded text in the code added above
       const boundedText = mockHost.getLocationMarkerFor(TEST_TEMPLATE, 'my');
       expect(textSpan).toEqual(boundedText);
 
       expect(definitions).toBeDefined();
-      expect(definitions !.length).toBe(1);
+      expect(definitions!.length).toBe(1);
 
       const refFileName = '/node_modules/@angular/common/common.d.ts';
-      const def = definitions ![0];
+      const def = definitions![0];
       expect(def.fileName).toBe(refFileName);
       expect(def.name).toBe('NgForOf');
       expect(def.kind).toBe('directive');
@@ -294,27 +312,24 @@ describe('definitions', () => {
     });
 
     it('should be able to find the directive property', () => {
-      mockHost.override(
-          TEST_TEMPLATE,
-          `<div *ngFor="let item of heroes; ~{start-my}«trackBy»: test~{end-my};"></div>`);
+      mockHost.override(TEST_TEMPLATE, `<div *ngFor="let item of heroes; «trackBy»: test;"></div>`);
 
       // Get the marker for trackBy in the code added above.
       const marker = mockHost.getReferenceMarkerFor(TEST_TEMPLATE, 'trackBy');
 
       const result = ngService.getDefinitionAndBoundSpan(TEST_TEMPLATE, marker.start);
       expect(result).toBeDefined();
-      const {textSpan, definitions} = result !;
+      const {textSpan, definitions} = result!;
 
       // Get the marker for bounded text in the code added above
-      const boundedText = mockHost.getLocationMarkerFor(TEST_TEMPLATE, 'my');
-      expect(textSpan).toEqual(boundedText);
+      expect(textSpan).toEqual(marker);
 
       expect(definitions).toBeDefined();
       // The two definitions are setter and getter of 'ngForTrackBy'.
-      expect(definitions !.length).toBe(2);
+      expect(definitions!.length).toBe(2);
 
       const refFileName = '/node_modules/@angular/common/common.d.ts';
-      definitions !.forEach(def => {
+      definitions!.forEach(def => {
         expect(def.fileName).toBe(refFileName);
         expect(def.name).toBe('ngForTrackBy');
         expect(def.kind).toBe('method');
@@ -330,19 +345,19 @@ describe('definitions', () => {
 
       const result = ngService.getDefinitionAndBoundSpan(TEST_TEMPLATE, marker.start);
       expect(result).toBeDefined();
-      const {textSpan, definitions} = result !;
+      const {textSpan, definitions} = result!;
 
       expect(textSpan).toEqual(marker);
 
       expect(definitions).toBeDefined();
-      expect(definitions !.length).toBe(1);
+      expect(definitions!.length).toBe(1);
 
       const refFileName = '/app/parsing-cases.ts';
-      const def = definitions ![0];
+      const def = definitions![0];
       expect(def.fileName).toBe(refFileName);
       expect(def.name).toBe('heroes');
       expect(def.kind).toBe('property');
-      const content = mockHost.readFile(refFileName) !;
+      const content = mockHost.readFile(refFileName)!;
       expect(content.substring(def.textSpan.start, def.textSpan.start + def.textSpan.length))
           .toEqual(`heroes: Hero[] = [this.hero];`);
     });
@@ -357,28 +372,28 @@ describe('definitions', () => {
 
     const result = ngService.getDefinitionAndBoundSpan(TEST_TEMPLATE, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     // Get the marker for bounded text in the code added above
     const boundedText = mockHost.getLocationMarkerFor(TEST_TEMPLATE, 'my');
     expect(textSpan).toEqual(boundedText);
 
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(2);
-    const [def1, def2] = definitions !;
+    expect(definitions!.length).toBe(2);
+    const [def1, def2] = definitions!;
 
     const refFileName = '/app/parsing-cases.ts';
     expect(def1.fileName).toBe(refFileName);
     expect(def1.name).toBe('model');
     expect(def1.kind).toBe('property');
-    let content = mockHost.readFile(refFileName) !;
+    let content = mockHost.readFile(refFileName)!;
     expect(content.substring(def1.textSpan.start, def1.textSpan.start + def1.textSpan.length))
         .toEqual(`@Input() model: string = 'model';`);
 
     expect(def2.fileName).toBe(refFileName);
     expect(def2.name).toBe('modelChange');
     expect(def2.kind).toBe('event');
-    content = mockHost.readFile(refFileName) !;
+    content = mockHost.readFile(refFileName)!;
     expect(content.substring(def2.textSpan.start, def2.textSpan.start + def2.textSpan.length))
         .toEqual(`@Output() modelChange: EventEmitter<string> = new EventEmitter();`);
   });
@@ -394,13 +409,13 @@ describe('definitions', () => {
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
 
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     expect(textSpan).toEqual({start: marker.start - 2, length: 9});
 
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const [def] = definitions !;
+    expect(definitions!.length).toBe(1);
+    const [def] = definitions!;
     expect(def.fileName).toBe('/app/test.ng');
     expect(def.textSpan).toEqual({start: 0, length: 0});
   });
@@ -417,13 +432,13 @@ describe('definitions', () => {
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
 
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     expect(textSpan).toEqual({start: marker.start - 2, length: 10});
 
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const [def] = definitions !;
+    expect(definitions!.length).toBe(1);
+    const [def] = definitions!;
     expect(def.fileName).toBe('/app/test.css');
     expect(def.textSpan).toEqual({start: 0, length: 0});
   });
@@ -440,12 +455,12 @@ describe('definitions', () => {
     const marker = mockHost.getReferenceMarkerFor(fileName, 'name');
     const result = ngService.getDefinitionAndBoundSpan(fileName, marker.start);
     expect(result).toBeDefined();
-    const {textSpan, definitions} = result !;
+    const {textSpan, definitions} = result!;
 
     expect(textSpan).toEqual(marker);
     expect(definitions).toBeDefined();
-    expect(definitions !.length).toBe(1);
-    const def = definitions ![0];
+    expect(definitions!.length).toBe(1);
+    const def = definitions![0];
 
     expect(def.fileName).toBe(fileName);
     expect(def.name).toBe('name');

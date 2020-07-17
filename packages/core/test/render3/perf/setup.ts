@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -8,8 +8,8 @@
 import {addToViewTree, createLContainer, createLView, createTNode, createTView, getOrCreateTNode, refreshView, renderView} from '../../../src/render3/instructions/shared';
 import {ComponentTemplate, DirectiveDefList} from '../../../src/render3/interfaces/definition';
 import {TAttributes, TNodeType, TViewNode} from '../../../src/render3/interfaces/node';
-import {RendererFactory3, domRendererFactory3} from '../../../src/render3/interfaces/renderer';
-import {LView, LViewFlags, TView, TViewType} from '../../../src/render3/interfaces/view';
+import {domRendererFactory3, RendererFactory3} from '../../../src/render3/interfaces/renderer';
+import {LView, LViewFlags, TVIEW, TView, TViewType} from '../../../src/render3/interfaces/view';
 import {insertView} from '../../../src/render3/node_manipulation';
 
 import {MicroBenchmarkRendererFactory} from './noop_renderer';
@@ -19,16 +19,18 @@ const rendererFactory: RendererFactory3 =
     isBrowser ? domRendererFactory3 : new MicroBenchmarkRendererFactory;
 const renderer = rendererFactory.createRenderer(null, null);
 
-export function createAndRenderLView(parentLView: LView, tView: TView, hostTNode: TViewNode) {
+export function createAndRenderLView(
+    parentLView: LView, tView: TView, hostTNode: TViewNode): LView {
   const embeddedLView = createLView(
       parentLView, tView, {}, LViewFlags.CheckAlways, null, hostTNode, rendererFactory, renderer);
-  renderView(embeddedLView, tView, null);
+  renderView(tView, embeddedLView, null);
+  return embeddedLView;
 }
 
 export function setupRootViewWithEmbeddedViews(
-    templateFn: ComponentTemplate<any>| null, decls: number, vars: number, noOfViews: number,
-    embeddedViewContext: any = {}, consts: TAttributes[] | null = null,
-    directiveRegistry: DirectiveDefList | null = null): LView {
+    templateFn: ComponentTemplate<any>|null, decls: number, vars: number, noOfViews: number,
+    embeddedViewContext: any = {}, consts: TAttributes[]|null = null,
+    directiveRegistry: DirectiveDefList|null = null): LView {
   return setupTestHarness(
              templateFn, decls, vars, noOfViews, embeddedViewContext, consts, directiveRegistry)
       .hostLView;
@@ -43,9 +45,9 @@ export interface TestHarness {
 }
 
 export function setupTestHarness(
-    templateFn: ComponentTemplate<any>| null, decls: number, vars: number, noOfViews: number,
-    embeddedViewContext: any = {}, consts: TAttributes[] | null = null,
-    directiveRegistry: DirectiveDefList | null = null): TestHarness {
+    templateFn: ComponentTemplate<any>|null, decls: number, vars: number, noOfViews: number,
+    embeddedViewContext: any = {}, consts: TAttributes[]|null = null,
+    directiveRegistry: DirectiveDefList|null = null): TestHarness {
   // Create a root view with a container
   const hostTView = createTView(TViewType.Root, -1, null, 1, 0, null, null, null, null, consts);
   const tContainerNode = getOrCreateTNode(hostTView, null, 0, TNodeType.Container, null, null);
@@ -68,17 +70,18 @@ export function setupTestHarness(
     const embeddedLView = createLView(
         hostLView, embeddedTView, embeddedViewContext, LViewFlags.CheckAlways, null, viewTNode,
         rendererFactory, renderer);
-    renderView(embeddedLView, embeddedTView, embeddedViewContext);
+    renderView(embeddedTView, embeddedLView, embeddedViewContext);
     return embeddedLView;
   }
 
   function detectChanges(): void {
-    refreshView(hostLView, hostTView, hostTView.template, embeddedViewContext);
+    refreshView(hostTView, hostLView, hostTView.template, embeddedViewContext);
   }
 
   // create embedded views and add them to the container
   for (let i = 0; i < noOfViews; i++) {
-    insertView(createEmbeddedLView(), lContainer, i);
+    const lView = createEmbeddedLView();
+    insertView(lView[TVIEW], lView, lContainer, i);
   }
 
   return {

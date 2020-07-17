@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -8,16 +8,16 @@
 import * as ts from 'typescript';
 
 import {absoluteFrom} from '../../file_system';
-import {TestFile, runInEachFileSystem} from '../../file_system/testing';
-import {TypeScriptReflectionHost, isNamedClassDeclaration} from '../../reflection';
+import {runInEachFileSystem, TestFile} from '../../file_system/testing';
+import {isNamedClassDeclaration, TypeScriptReflectionHost} from '../../reflection';
 import {getDeclaration, makeProgram} from '../../testing';
 import {TypeParameterEmitter} from '../src/type_parameter_emitter';
+
 import {angularCoreDts} from './test_utils';
 
 
 runInEachFileSystem(() => {
   describe('type parameter emitter', () => {
-
     function createEmitter(source: string, additionalFiles: TestFile[] = []) {
       const files: TestFile[] = [
         angularCoreDts(), {name: absoluteFrom('/main.ts'), contents: source}, ...additionalFiles
@@ -34,7 +34,7 @@ runInEachFileSystem(() => {
 
     function emit(emitter: TypeParameterEmitter) {
       const emitted = emitter.emit(ref => {
-        const typeName = ts.createQualifiedName(ts.createIdentifier('test'), ref.debugName !);
+        const typeName = ts.createQualifiedName(ts.createIdentifier('test'), ref.debugName!);
         return ts.createTypeReferenceNode(typeName, /* typeArguments */ undefined);
       });
 
@@ -162,5 +162,52 @@ runInEachFileSystem(() => {
           .toThrowError('A type reference to emit must be imported from an absolute module');
     });
 
+    it('can emit references to interfaces', () => {
+      const additionalFiles: TestFile[] = [{
+        name: absoluteFrom('/node_modules/types/index.d.ts'),
+        contents: `export declare interface MyInterface {}`,
+      }];
+      const emitter = createEmitter(
+          `
+          import {MyInterface} from 'types';
+
+          export class TestClass<T extends MyInterface> {}`,
+          additionalFiles);
+
+      expect(emitter.canEmit()).toBe(true);
+      expect(emit(emitter)).toEqual('<T extends test.MyInterface>');
+    });
+
+    it('can emit references to enums', () => {
+      const additionalFiles: TestFile[] = [{
+        name: absoluteFrom('/node_modules/types/index.d.ts'),
+        contents: `export declare enum MyEnum {}`,
+      }];
+      const emitter = createEmitter(
+          `
+          import {MyEnum} from 'types';
+
+          export class TestClass<T extends MyEnum> {}`,
+          additionalFiles);
+
+      expect(emitter.canEmit()).toBe(true);
+      expect(emit(emitter)).toEqual('<T extends test.MyEnum>');
+    });
+
+    it('can emit references to type aliases', () => {
+      const additionalFiles: TestFile[] = [{
+        name: absoluteFrom('/node_modules/types/index.d.ts'),
+        contents: `export declare type MyType = string;`,
+      }];
+      const emitter = createEmitter(
+          `
+          import {MyType} from 'types';
+
+          export class TestClass<T extends MyType> {}`,
+          additionalFiles);
+
+      expect(emitter.canEmit()).toBe(true);
+      expect(emit(emitter)).toEqual('<T extends test.MyType>');
+    });
   });
 });

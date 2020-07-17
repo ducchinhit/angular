@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -8,8 +8,9 @@
 import {bindingUpdated} from '../bindings';
 import {TNode} from '../interfaces/node';
 import {SanitizerFn} from '../interfaces/sanitization';
-import {LView, TVIEW} from '../interfaces/view';
-import {getLView, getSelectedIndex, nextBindingIndex} from '../state';
+import {LView, RENDERER, TView} from '../interfaces/view';
+import {getLView, getSelectedTNode, getTView, nextBindingIndex} from '../state';
+
 import {elementPropertyInternal, setInputsForProperty, storePropertyBindingMetadata} from './shared';
 
 
@@ -32,13 +33,15 @@ import {elementPropertyInternal, setInputsForProperty, storePropertyBindingMetad
  * @codeGenApi
  */
 export function ɵɵproperty<T>(
-    propName: string, value: T, sanitizer?: SanitizerFn | null): typeof ɵɵproperty {
+    propName: string, value: T, sanitizer?: SanitizerFn|null): typeof ɵɵproperty {
   const lView = getLView();
   const bindingIndex = nextBindingIndex();
   if (bindingUpdated(lView, bindingIndex, value)) {
-    const nodeIndex = getSelectedIndex();
-    elementPropertyInternal(lView, nodeIndex, propName, value, sanitizer);
-    ngDevMode && storePropertyBindingMetadata(lView[TVIEW].data, nodeIndex, propName, bindingIndex);
+    const tView = getTView();
+    const tNode = getSelectedTNode();
+    elementPropertyInternal(
+        tView, tNode, lView, propName, value, lView[RENDERER], sanitizer, false);
+    ngDevMode && storePropertyBindingMetadata(tView.data, tNode, propName, bindingIndex);
   }
   return ɵɵproperty;
 }
@@ -48,10 +51,9 @@ export function ɵɵproperty<T>(
  * directive input.
  */
 export function setDirectiveInputsWhichShadowsStyling(
-    tNode: TNode, lView: LView, value: any, isClassBased: boolean) {
-  const inputs = tNode.inputs !;
+    tView: TView, tNode: TNode, lView: LView, value: any, isClassBased: boolean) {
+  const inputs = tNode.inputs!;
   const property = isClassBased ? 'class' : 'style';
   // We support both 'class' and `className` hence the fallback.
-  const stylingInputs = inputs[property] || (isClassBased && inputs['className']);
-  setInputsForProperty(lView, stylingInputs, property, value);
+  setInputsForProperty(tView, lView, inputs[property], property, value);
 }

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -11,14 +11,14 @@ import {assertDataInRange} from '../../util/assert';
 import {isObservable} from '../../util/lang';
 import {EMPTY_OBJ} from '../empty';
 import {PropertyAliasValue, TNode, TNodeFlags, TNodeType} from '../interfaces/node';
-import {GlobalTargetResolver, RElement, Renderer3, isProceduralRenderer} from '../interfaces/renderer';
+import {GlobalTargetResolver, isProceduralRenderer, RElement, Renderer3} from '../interfaces/renderer';
 import {isDirectiveHost} from '../interfaces/type_checks';
-import {CLEANUP, FLAGS, LView, LViewFlags, RENDERER, TVIEW} from '../interfaces/view';
+import {CLEANUP, FLAGS, LView, LViewFlags, RENDERER, TView} from '../interfaces/view';
 import {assertNodeOfPossibleTypes} from '../node_assert';
-import {getLView, getPreviousOrParentTNode} from '../state';
+import {getCurrentDirectiveDef, getLView, getPreviousOrParentTNode, getTView} from '../state';
 import {getComponentLViewByIndex, getNativeByTNode, unwrapRNode} from '../util/view_utils';
 
-import {getCleanup, handleError, loadComponentRenderer, markViewDirty} from './shared';
+import {getLCleanup, handleError, loadComponentRenderer, markViewDirty} from './shared';
 
 
 
@@ -40,40 +40,44 @@ export function ɵɵlistener(
     eventName: string, listenerFn: (e?: any) => any, useCapture = false,
     eventTargetResolver?: GlobalTargetResolver): typeof ɵɵlistener {
   const lView = getLView();
+  const tView = getTView();
   const tNode = getPreviousOrParentTNode();
   listenerInternal(
-      lView, lView[RENDERER], tNode, eventName, listenerFn, useCapture, eventTargetResolver);
+      tView, lView, lView[RENDERER], tNode, eventName, listenerFn, useCapture, eventTargetResolver);
   return ɵɵlistener;
 }
 
 /**
-* Registers a synthetic host listener (e.g. `(@foo.start)`) on a component.
-*
-* This instruction is for compatibility purposes and is designed to ensure that a
-* synthetic host listener (e.g. `@HostListener('@foo.start')`) properly gets rendered
-* in the component's renderer. Normally all host listeners are evaluated with the
-* parent component's renderer, but, in the case of animation @triggers, they need
-* to be evaluated with the sub component's renderer (because that's where the
-* animation triggers are defined).
-*
-* Do not use this instruction as a replacement for `listener`. This instruction
-* only exists to ensure compatibility with the ViewEngine's host binding behavior.
-*
-* @param eventName Name of the event
-* @param listenerFn The function to be called when event emits
-* @param useCapture Whether or not to use capture in event listener
-* @param eventTargetResolver Function that returns global target information in case this listener
-* should be attached to a global object like window, document or body
+ * Registers a synthetic host listener (e.g. `(@foo.start)`) on a component or directive.
+ *
+ * This instruction is for compatibility purposes and is designed to ensure that a
+ * synthetic host listener (e.g. `@HostListener('@foo.start')`) properly gets rendered
+ * in the component's renderer. Normally all host listeners are evaluated with the
+ * parent component's renderer, but, in the case of animation @triggers, they need
+ * to be evaluated with the sub component's renderer (because that's where the
+ * animation triggers are defined).
+ *
+ * Do not use this instruction as a replacement for `listener`. This instruction
+ * only exists to ensure compatibility with the ViewEngine's host binding behavior.
+ *
+ * @param eventName Name of the event
+ * @param listenerFn The function to be called when event emits
+ * @param useCapture Whether or not to use capture in event listener
+ * @param eventTargetResolver Function that returns global target information in case this listener
+ * should be attached to a global object like window, document or body
  *
  * @codeGenApi
-*/
+ */
 export function ɵɵcomponentHostSyntheticListener(
     eventName: string, listenerFn: (e?: any) => any, useCapture = false,
     eventTargetResolver?: GlobalTargetResolver): typeof ɵɵcomponentHostSyntheticListener {
-  const lView = getLView();
   const tNode = getPreviousOrParentTNode();
-  const renderer = loadComponentRenderer(tNode, lView);
-  listenerInternal(lView, renderer, tNode, eventName, listenerFn, useCapture, eventTargetResolver);
+  const lView = getLView();
+  const tView = getTView();
+  const currentDef = getCurrentDirectiveDef(tView.data);
+  const renderer = loadComponentRenderer(currentDef, tNode, lView);
+  listenerInternal(
+      tView, lView, renderer, tNode, eventName, listenerFn, useCapture, eventTargetResolver);
   return ɵɵcomponentHostSyntheticListener;
 }
 
@@ -83,8 +87,7 @@ export function ɵɵcomponentHostSyntheticListener(
  * are registered for a given element.
  */
 function findExistingListener(
-    lView: LView, eventName: string, tNodeIdx: number): ((e?: any) => any)|null {
-  const tView = lView[TVIEW];
+    tView: TView, lView: LView, eventName: string, tNodeIdx: number): ((e?: any) => any)|null {
   const tCleanup = tView.cleanup;
   if (tCleanup != null) {
     for (let i = 0; i < tCleanup.length - 1; i += 2) {
@@ -93,7 +96,7 @@ function findExistingListener(
         // We have found a matching event name on the same node but it might not have been
         // registered yet, so we must explicitly verify entries in the LView cleanup data
         // structures.
-        const lCleanup = lView[CLEANUP] !;
+        const lCleanup = lView[CLEANUP]!;
         const listenerIdxInLCleanup = tCleanup[i + 2];
         return lCleanup.length > listenerIdxInLCleanup ? lCleanup[listenerIdxInLCleanup] : null;
       }
@@ -111,10 +114,9 @@ function findExistingListener(
 }
 
 function listenerInternal(
-    lView: LView, renderer: Renderer3, tNode: TNode, eventName: string,
+    tView: TView, lView: LView, renderer: Renderer3, tNode: TNode, eventName: string,
     listenerFn: (e?: any) => any, useCapture = false,
     eventTargetResolver?: GlobalTargetResolver): void {
-  const tView = lView[TVIEW];
   const isTNodeDirectiveHost = isDirectiveHost(tNode);
   const firstCreatePass = tView.firstCreatePass;
   const tCleanup: false|any[] = firstCreatePass && (tView.cleanup || (tView.cleanup = []));
@@ -122,10 +124,11 @@ function listenerInternal(
   // When the ɵɵlistener instruction was generated and is executed we know that there is either a
   // native listener or a directive output on this element. As such we we know that we will have to
   // register a listener and store its cleanup function on LView.
-  const lCleanup = getCleanup(lView);
+  const lCleanup = getLCleanup(lView);
 
-  ngDevMode && assertNodeOfPossibleTypes(
-                   tNode, TNodeType.Element, TNodeType.Container, TNodeType.ElementContainer);
+  ngDevMode &&
+      assertNodeOfPossibleTypes(
+          tNode, [TNodeType.Element, TNodeType.Container, TNodeType.ElementContainer]);
 
   let processOutputs = true;
 
@@ -160,7 +163,7 @@ function listenerInternal(
       // matching on a given node as we can't register multiple event handlers for the same event in
       // a template (this would mean having duplicate attributes).
       if (!eventTargetResolver && isTNodeDirectiveHost) {
-        existingListener = findExistingListener(lView, eventName, tNode.index);
+        existingListener = findExistingListener(tView, lView, eventName, tNode.index);
       }
       if (existingListener !== null) {
         // Attach a new listener to coalesced listeners list, maintaining the order in which
@@ -207,8 +210,8 @@ function listenerInternal(
         const output = directiveInstance[minifiedName];
 
         if (ngDevMode && !isObservable(output)) {
-          throw new Error(
-              `@Output ${minifiedName} not initialized in '${directiveInstance.constructor.name}'.`);
+          throw new Error(`@Output ${minifiedName} not initialized in '${
+              directiveInstance.constructor.name}'.`);
         }
 
         const subscription = output.subscribe(listenerFn);

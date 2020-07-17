@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -167,7 +167,7 @@ const refreshTime = duplicateStyleAndClassBindingsBenchmark('refresh');
 // run change detection in the update mode
 console.profile('duplicate_style_and_class_bindings_refresh');
 while (refreshTime()) {
-  refreshView(rootLView, rootTView, null, null);
+  refreshView(rootTView, rootLView, null, null);
 }
 console.profileEnd();
 

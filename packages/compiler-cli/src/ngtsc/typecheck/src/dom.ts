@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -9,10 +9,10 @@
 import {DomElementSchemaRegistry, ParseSourceSpan, SchemaMetadata, TmplAstElement} from '@angular/compiler';
 import * as ts from 'typescript';
 
-import {ErrorCode} from '../../diagnostics';
+import {ErrorCode, ngErrorCode} from '../../diagnostics';
 
 import {TemplateId} from './api';
-import {TemplateSourceResolver, makeTemplateDiagnostic} from './diagnostics';
+import {makeTemplateDiagnostic, TemplateSourceResolver} from './diagnostics';
 
 const REGISTRY = new DomElementSchemaRegistry();
 const REMOVE_XHTML_REGEX = /^:xhtml:/;
@@ -66,7 +66,9 @@ export interface DomSchemaChecker {
 export class RegistryDomSchemaChecker implements DomSchemaChecker {
   private _diagnostics: ts.Diagnostic[] = [];
 
-  get diagnostics(): ReadonlyArray<ts.Diagnostic> { return this._diagnostics; }
+  get diagnostics(): ReadonlyArray<ts.Diagnostic> {
+    return this._diagnostics;
+  }
 
   constructor(private resolver: TemplateSourceResolver) {}
 
@@ -83,8 +85,8 @@ export class RegistryDomSchemaChecker implements DomSchemaChecker {
       errorMsg +=
           `1. If '${name}' is an Angular component, then verify that it is part of this module.\n`;
       if (name.indexOf('-') > -1) {
-        errorMsg +=
-            `2. If '${name}' is a Web Component then add 'CUSTOM_ELEMENTS_SCHEMA' to the '@NgModule.schemas' of this component to suppress this message.`;
+        errorMsg += `2. If '${
+            name}' is a Web Component then add 'CUSTOM_ELEMENTS_SCHEMA' to the '@NgModule.schemas' of this component to suppress this message.`;
       } else {
         errorMsg +=
             `2. To allow any element add 'NO_ERRORS_SCHEMA' to the '@NgModule.schemas' of this component.`;
@@ -92,7 +94,7 @@ export class RegistryDomSchemaChecker implements DomSchemaChecker {
 
       const diag = makeTemplateDiagnostic(
           mapping, element.sourceSpan, ts.DiagnosticCategory.Error,
-          ErrorCode.SCHEMA_INVALID_ELEMENT, errorMsg);
+          ngErrorCode(ErrorCode.SCHEMA_INVALID_ELEMENT), errorMsg);
       this._diagnostics.push(diag);
     }
   }
@@ -107,17 +109,22 @@ export class RegistryDomSchemaChecker implements DomSchemaChecker {
           `Can't bind to '${name}' since it isn't a known property of '${element.name}'.`;
       if (element.name.startsWith('ng-')) {
         errorMsg +=
-            `\n1. If '${name}' is an Angular directive, then add 'CommonModule' to the '@NgModule.imports' of this component.` +
+            `\n1. If '${
+                name}' is an Angular directive, then add 'CommonModule' to the '@NgModule.imports' of this component.` +
             `\n2. To allow any property add 'NO_ERRORS_SCHEMA' to the '@NgModule.schemas' of this component.`;
       } else if (element.name.indexOf('-') > -1) {
         errorMsg +=
-            `\n1. If '${element.name}' is an Angular component and it has '${name}' input, then verify that it is part of this module.` +
-            `\n2. If '${element.name}' is a Web Component then add 'CUSTOM_ELEMENTS_SCHEMA' to the '@NgModule.schemas' of this component to suppress this message.` +
+            `\n1. If '${element.name}' is an Angular component and it has '${
+                name}' input, then verify that it is part of this module.` +
+            `\n2. If '${
+                element
+                    .name}' is a Web Component then add 'CUSTOM_ELEMENTS_SCHEMA' to the '@NgModule.schemas' of this component to suppress this message.` +
             `\n3. To allow any property add 'NO_ERRORS_SCHEMA' to the '@NgModule.schemas' of this component.`;
       }
 
       const diag = makeTemplateDiagnostic(
-          mapping, span, ts.DiagnosticCategory.Error, ErrorCode.SCHEMA_INVALID_ATTRIBUTE, errorMsg);
+          mapping, span, ts.DiagnosticCategory.Error,
+          ngErrorCode(ErrorCode.SCHEMA_INVALID_ATTRIBUTE), errorMsg);
       this._diagnostics.push(diag);
     }
   }

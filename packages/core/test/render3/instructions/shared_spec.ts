@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -32,9 +32,14 @@ import {enterView, getBindingRoot, getLView, setBindingIndex} from '@angular/cor
 export function enterViewWithOneDiv() {
   const renderer = domRendererFactory3.createRenderer(null, null);
   const div = renderer.createElement('div');
-  const tView =
-      createTView(TViewType.Component, -1, emptyTemplate, 1, 10, null, null, null, null, null);
-  const tNode = tView.firstChild = createTNode(tView, null !, TNodeType.Element, 0, 'div', null);
+  const consts = 1;
+  const vars = 60;  // Space for directive expando,  template, component + 3 directives if we assume
+                    // that each consume 10 slots.
+  const tView = createTView(
+      TViewType.Component, -1, emptyTemplate, consts, vars, null, null, null, null, null);
+  // Just assume that the expando starts after 10 initial bindings.
+  tView.expandoStartIndex = HEADER_OFFSET + 10;
+  const tNode = tView.firstChild = createTNode(tView, null!, TNodeType.Element, 0, 'div', null);
   const lView = createLView(
       null, tView, null, LViewFlags.CheckAlways, null, null, domRendererFactory3, renderer, null,
       null);

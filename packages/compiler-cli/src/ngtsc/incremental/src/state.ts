@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -8,7 +8,9 @@
 
 import * as ts from 'typescript';
 
+import {absoluteFrom, absoluteFromSourceFile, AbsoluteFsPath} from '../../file_system';
 import {ClassRecord, TraitCompiler} from '../../transform';
+import {FileTypeCheckingData} from '../../typecheck/src/context';
 import {IncrementalBuild} from '../api';
 
 import {FileDependencyGraph} from './dependency_tracking';
@@ -16,7 +18,7 @@ import {FileDependencyGraph} from './dependency_tracking';
 /**
  * Drives an incremental build, by tracking changes and determining which files need to be emitted.
  */
-export class IncrementalDriver implements IncrementalBuild<ClassRecord> {
+export class IncrementalDriver implements IncrementalBuild<ClassRecord, FileTypeCheckingData> {
   /**
    * State of the current build.
    *
@@ -52,7 +54,7 @@ export class IncrementalDriver implements IncrementalBuild<ClassRecord> {
       state = {
         kind: BuildStateKind.Pending,
         pendingEmit: oldDriver.state.pendingEmit,
-        changedResourcePaths: new Set<string>(),
+        changedResourcePaths: new Set<AbsoluteFsPath>(),
         changedTsPaths: new Set<string>(),
         lastGood: oldDriver.state.lastGood,
       };
@@ -61,7 +63,7 @@ export class IncrementalDriver implements IncrementalBuild<ClassRecord> {
     // Merge the freshly modified resource files with any prior ones.
     if (modifiedResourceFiles !== null) {
       for (const resFile of modifiedResourceFiles) {
-        state.changedResourcePaths.add(resFile);
+        state.changedResourcePaths.add(absoluteFrom(resFile));
       }
     }
 
@@ -153,7 +155,7 @@ export class IncrementalDriver implements IncrementalBuild<ClassRecord> {
     const state: PendingBuildState = {
       kind: BuildStateKind.Pending,
       pendingEmit: new Set<string>(tsFiles.map(sf => sf.fileName)),
-      changedResourcePaths: new Set<string>(),
+      changedResourcePaths: new Set<AbsoluteFsPath>(),
       changedTsPaths: new Set<string>(),
       lastGood: null,
     };
@@ -189,13 +191,28 @@ export class IncrementalDriver implements IncrementalBuild<ClassRecord> {
       lastGood: {
         depGraph: this.depGraph,
         traitCompiler: traitCompiler,
-      }
+        typeCheckingResults: null,
+      },
+
+      priorTypeCheckingResults:
+          this.state.lastGood !== null ? this.state.lastGood.typeCheckingResults : null,
     };
   }
 
-  recordSuccessfulEmit(sf: ts.SourceFile): void { this.state.pendingEmit.delete(sf.fileName); }
+  recordSuccessfulTypeCheck(results: Map<AbsoluteFsPath, FileTypeCheckingData>): void {
+    if (this.state.lastGood === null || this.state.kind !== BuildStateKind.Analyzed) {
+      return;
+    }
+    this.state.lastGood.typeCheckingResults = results;
+  }
 
-  safeToSkipEmit(sf: ts.SourceFile): boolean { return !this.state.pendingEmit.has(sf.fileName); }
+  recordSuccessfulEmit(sf: ts.SourceFile): void {
+    this.state.pendingEmit.delete(sf.fileName);
+  }
+
+  safeToSkipEmit(sf: ts.SourceFile): boolean {
+    return !this.state.pendingEmit.has(sf.fileName);
+  }
 
   priorWorkFor(sf: ts.SourceFile): ClassRecord[]|null {
     if (this.state.lastGood === null || this.logicalChanges === null) {
@@ -209,9 +226,31 @@ export class IncrementalDriver implements IncrementalBuild<ClassRecord> {
       return this.state.lastGood.traitCompiler.recordsFor(sf);
     }
   }
+
+  priorTypeCheckingResultsFor(sf: ts.SourceFile): FileTypeCheckingData|null {
+    if (this.state.kind !== BuildStateKind.Analyzed ||
+        this.state.priorTypeCheckingResults === null || this.logicalChanges === null) {
+      return null;
+    }
+
+    if (this.logicalChanges.has(sf.fileName)) {
+      return null;
+    }
+
+    const fileName = absoluteFromSourceFile(sf);
+    if (!this.state.priorTypeCheckingResults.has(fileName)) {
+      return null;
+    }
+    const data = this.state.priorTypeCheckingResults.get(fileName)!;
+    if (data.hasInlines) {
+      return null;
+    }
+
+    return data;
+  }
 }
 
-type BuildState = PendingBuildState | AnalyzedBuildState;
+type BuildState = PendingBuildState|AnalyzedBuildState;
 
 enum BuildStateKind {
   Pending,
@@ -231,7 +270,8 @@ interface BaseBuildState {
    * After analysis, it's updated to include any files which might have changed and need a re-emit
    * as a result of incremental changes.
    *
-   * If an emit happens, any written files are removed from the `Set`, as they're no longer pending.
+   * If an emit happens, any written files are removed from the `Set`, as they're no longer
+   * pending.
    *
    * Thus, after compilation `pendingEmit` should be empty (on a successful build) or contain the
    * files which still need to be emitted but have not yet been (due to errors).
@@ -262,6 +302,11 @@ interface BaseBuildState {
      * This is used to extract "prior work" which might be reusable in this compilation.
      */
     traitCompiler: TraitCompiler;
+
+    /**
+     * Type checking results which will be passed onto the next build.
+     */
+    typeCheckingResults: Map<AbsoluteFsPath, FileTypeCheckingData>| null;
   }|null;
 }
 
@@ -287,7 +332,7 @@ interface PendingBuildState extends BaseBuildState {
   /**
    * Set of resource file paths which have changed since the last successfully analyzed build.
    */
-  changedResourcePaths: Set<string>;
+  changedResourcePaths: Set<AbsoluteFsPath>;
 }
 
 interface AnalyzedBuildState extends BaseBuildState {
@@ -301,6 +346,11 @@ interface AnalyzedBuildState extends BaseBuildState {
    * analyzed build.
    */
   pendingEmit: Set<string>;
+
+  /**
+   * Type checking results from the previous compilation, which can be reused in this one.
+   */
+  priorTypeCheckingResults: Map<AbsoluteFsPath, FileTypeCheckingData>|null;
 }
 
 function tsOnlyFiles(program: ts.Program): ReadonlyArray<ts.SourceFile> {

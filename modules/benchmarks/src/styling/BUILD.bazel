@@ -8,8 +8,7 @@ ts_library(
     srcs = ["styling_perf.spec.ts"],
     tsconfig = "//modules/benchmarks:tsconfig-e2e.json",
     deps = [
-        "//modules/e2e_util",
-        "@npm//@types/jasminewd2",
+        "//dev-infra/benchmark/driver-utilities",
         "@npm//protractor",
     ],
 )

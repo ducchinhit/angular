@@ -1,14 +1,15 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {AfterContentChecked, AfterContentInit, AfterViewChecked, AfterViewInit, DoCheck, OnChanges, OnDestroy, OnInit} from '../interface/lifecycle_hooks';
 import {assertEqual, assertNotEqual} from '../util/assert';
-
 import {assertFirstCreatePass} from './assert';
+import {NgOnChangesFeatureImpl} from './features/ng_onchanges_feature';
 import {DirectiveDef} from './interfaces/definition';
 import {TNode} from './interfaces/node';
 import {FLAGS, HookData, InitPhaseState, LView, LViewFlags, PREORDER_HOOK_FLAGS, PreOrderHookFlags, TView} from './interfaces/view';
@@ -31,20 +32,23 @@ import {getCheckNoChangesMode} from './state';
 export function registerPreOrderHooks(
     directiveIndex: number, directiveDef: DirectiveDef<any>, tView: TView): void {
   ngDevMode && assertFirstCreatePass(tView);
-  const {onChanges, onInit, doCheck} = directiveDef;
+  const {ngOnChanges, ngOnInit, ngDoCheck} =
+      directiveDef.type.prototype as OnChanges & OnInit & DoCheck;
 
-  if (onChanges) {
-    (tView.preOrderHooks || (tView.preOrderHooks = [])).push(directiveIndex, onChanges);
-    (tView.preOrderCheckHooks || (tView.preOrderCheckHooks = [])).push(directiveIndex, onChanges);
+  if (ngOnChanges as Function | undefined) {
+    const wrappedOnChanges = NgOnChangesFeatureImpl(directiveDef);
+    (tView.preOrderHooks || (tView.preOrderHooks = [])).push(directiveIndex, wrappedOnChanges);
+    (tView.preOrderCheckHooks || (tView.preOrderCheckHooks = []))
+        .push(directiveIndex, wrappedOnChanges);
   }
 
-  if (onInit) {
-    (tView.preOrderHooks || (tView.preOrderHooks = [])).push(-directiveIndex, onInit);
+  if (ngOnInit) {
+    (tView.preOrderHooks || (tView.preOrderHooks = [])).push(0 - directiveIndex, ngOnInit);
   }
 
-  if (doCheck) {
-    (tView.preOrderHooks || (tView.preOrderHooks = [])).push(directiveIndex, doCheck);
-    (tView.preOrderCheckHooks || (tView.preOrderCheckHooks = [])).push(directiveIndex, doCheck);
+  if (ngDoCheck) {
+    (tView.preOrderHooks || (tView.preOrderHooks = [])).push(directiveIndex, ngDoCheck);
+    (tView.preOrderCheckHooks || (tView.preOrderCheckHooks = [])).push(directiveIndex, ngDoCheck);
   }
 }
 
@@ -73,27 +77,36 @@ export function registerPostOrderHooks(tView: TView, tNode: TNode): void {
   // hooks for projected components and directives must be called *before* their hosts.
   for (let i = tNode.directiveStart, end = tNode.directiveEnd; i < end; i++) {
     const directiveDef = tView.data[i] as DirectiveDef<any>;
-    if (directiveDef.afterContentInit) {
-      (tView.contentHooks || (tView.contentHooks = [])).push(-i, directiveDef.afterContentInit);
+    const lifecycleHooks: AfterContentInit&AfterContentChecked&AfterViewInit&AfterViewChecked&
+        OnDestroy = directiveDef.type.prototype;
+    const {
+      ngAfterContentInit,
+      ngAfterContentChecked,
+      ngAfterViewInit,
+      ngAfterViewChecked,
+      ngOnDestroy
+    } = lifecycleHooks;
+
+    if (ngAfterContentInit) {
+      (tView.contentHooks || (tView.contentHooks = [])).push(-i, ngAfterContentInit);
     }
 
-    if (directiveDef.afterContentChecked) {
-      (tView.contentHooks || (tView.contentHooks = [])).push(i, directiveDef.afterContentChecked);
-      (tView.contentCheckHooks || (tView.contentCheckHooks = [
-       ])).push(i, directiveDef.afterContentChecked);
+    if (ngAfterContentChecked) {
+      (tView.contentHooks || (tView.contentHooks = [])).push(i, ngAfterContentChecked);
+      (tView.contentCheckHooks || (tView.contentCheckHooks = [])).push(i, ngAfterContentChecked);
     }
 
-    if (directiveDef.afterViewInit) {
-      (tView.viewHooks || (tView.viewHooks = [])).push(-i, directiveDef.afterViewInit);
+    if (ngAfterViewInit) {
+      (tView.viewHooks || (tView.viewHooks = [])).push(-i, ngAfterViewInit);
     }
 
-    if (directiveDef.afterViewChecked) {
-      (tView.viewHooks || (tView.viewHooks = [])).push(i, directiveDef.afterViewChecked);
-      (tView.viewCheckHooks || (tView.viewCheckHooks = [])).push(i, directiveDef.afterViewChecked);
+    if (ngAfterViewChecked) {
+      (tView.viewHooks || (tView.viewHooks = [])).push(i, ngAfterViewChecked);
+      (tView.viewCheckHooks || (tView.viewCheckHooks = [])).push(i, ngAfterViewChecked);
     }
 
-    if (directiveDef.onDestroy != null) {
-      (tView.destroyHooks || (tView.destroyHooks = [])).push(i, directiveDef.onDestroy);
+    if (ngOnDestroy != null) {
+      (tView.destroyHooks || (tView.destroyHooks = [])).push(i, ngOnDestroy);
     }
   }
 }
@@ -132,7 +145,7 @@ export function registerPostOrderHooks(tView: TView, tNode: TNode): void {
  * - number: execute hooks only from the saved index until that node index exclusive (pre-order
  * case, when executing select(number))
  */
-export function executeCheckHooks(lView: LView, hooks: HookData, nodeIndex?: number | null) {
+export function executeCheckHooks(lView: LView, hooks: HookData, nodeIndex?: number|null) {
   callHooks(lView, hooks, InitPhaseState.InitPhaseCompleted, nodeIndex);
 }
 
@@ -150,10 +163,11 @@ export function executeCheckHooks(lView: LView, hooks: HookData, nodeIndex?: num
  * case, when executing select(number))
  */
 export function executeInitAndCheckHooks(
-    lView: LView, hooks: HookData, initPhase: InitPhaseState, nodeIndex?: number | null) {
-  ngDevMode && assertNotEqual(
-                   initPhase, InitPhaseState.InitPhaseCompleted,
-                   'Init pre-order hooks should not be called more than once');
+    lView: LView, hooks: HookData, initPhase: InitPhaseState, nodeIndex?: number|null) {
+  ngDevMode &&
+      assertNotEqual(
+          initPhase, InitPhaseState.InitPhaseCompleted,
+          'Init pre-order hooks should not be called more than once');
   if ((lView[FLAGS] & LViewFlags.InitPhaseStateMask) === initPhase) {
     callHooks(lView, hooks, initPhase, nodeIndex);
   }
@@ -188,17 +202,18 @@ export function incrementInitPhaseFlags(lView: LView, initPhase: InitPhaseState)
  */
 function callHooks(
     currentView: LView, arr: HookData, initPhase: InitPhaseState,
-    currentNodeIndex: number | null | undefined): void {
-  ngDevMode && assertEqual(
-                   getCheckNoChangesMode(), false,
-                   'Hooks should never be run in the check no changes mode.');
+    currentNodeIndex: number|null|undefined): void {
+  ngDevMode &&
+      assertEqual(
+          getCheckNoChangesMode(), false,
+          'Hooks should never be run in the check no changes mode.');
   const startIndex = currentNodeIndex !== undefined ?
       (currentView[PREORDER_HOOK_FLAGS] & PreOrderHookFlags.IndexOfTheNextPreOrderHookMaskMask) :
       0;
   const nodeIndexLimit = currentNodeIndex != null ? currentNodeIndex : -1;
   let lastNodeIndexFound = 0;
   for (let i = startIndex; i < arr.length; i++) {
-    const hook = arr[i + 1] as() => void;
+    const hook = arr[i + 1] as () => void;
     if (typeof hook === 'number') {
       lastNodeIndexFound = arr[i] as number;
       if (currentNodeIndex != null && lastNodeIndexFound >= currentNodeIndex) {
@@ -229,7 +244,7 @@ function callHooks(
  */
 function callHook(currentView: LView, initPhase: InitPhaseState, arr: HookData, i: number) {
   const isInitHook = arr[i] < 0;
-  const hook = arr[i + 1] as() => void;
+  const hook = arr[i + 1] as () => void;
   const directiveIndex = isInitHook ? -arr[i] : arr[i] as number;
   const directive = currentView[directiveIndex];
   if (isInitHook) {

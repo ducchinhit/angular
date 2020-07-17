@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -36,13 +36,14 @@ module.exports = function(config) {
       {pattern: 'node_modules/angular-mocks/angular-mocks.js', included: false, watched: false},
 
       'node_modules/core-js/client/core.js',
-      'dist/bin/packages/zone.js/npm_package/dist/zone.js',
-      'dist/bin/packages/zone.js/npm_package/dist/zone-testing.js',
-      'dist/bin/packages/zone.js/npm_package/dist/task-tracking.js',
+      'node_modules/jasmine-ajax/lib/mock-ajax.js',
+      'dist/bin/packages/zone.js/npm_package/bundles/zone.umd.js',
+      'dist/bin/packages/zone.js/npm_package/bundles/zone-testing.umd.js',
+      'dist/bin/packages/zone.js/npm_package/bundles/task-tracking.umd.js',
 
       // Including systemjs because it defines `__eval`, which produces correct stack traces.
       'test-events.js',
-      'shims_for_IE.js',
+      'third_party/shims_for_IE.js',
       'node_modules/systemjs/dist/system.src.js',
 
       // Serve polyfills necessary for testing the `elements` package.
@@ -152,9 +153,6 @@ module.exports = function(config) {
     set: () => {},
   });
 
-  // When running under Bazel with karma_web_test, SAUCE_TUNNEL_IDENTIFIER and KARMA_WEB_TEST_MODE
-  // will only be available if they are part of the Bazel action environment. More details in the
-  // "scripts/saucelabs/run-bazel-via-tunnel.sh" script.
   if (process.env['SAUCE_TUNNEL_IDENTIFIER']) {
     console.log(`SAUCE_TUNNEL_IDENTIFIER: ${process.env.SAUCE_TUNNEL_IDENTIFIER}`);
 
@@ -168,6 +166,16 @@ module.exports = function(config) {
     // TODO: This is currently not used because BS doesn't run on the CI. Consider removing.
     conf.browserStack.build = tunnelIdentifier;
     conf.browserStack.tunnelIdentifier = tunnelIdentifier;
+  }
+
+  // For SauceLabs jobs, we set up a domain which resolves to the machine which launched
+  // the tunnel. We do this because devices are sometimes not able to properly resolve
+  // `localhost` or `127.0.0.1` through the SauceLabs tunnel. Using a domain that does not
+  // resolve to anything on SauceLabs VMs ensures that such requests are always resolved through
+  // the tunnel, and resolve to the actual tunnel host machine (commonly the CircleCI VMs).
+  // More context can be found in: https://github.com/angular/angular/pull/35171.
+  if (process.env.SAUCE_LOCALHOST_ALIAS_DOMAIN) {
+    conf.hostname = process.env.SAUCE_LOCALHOST_ALIAS_DOMAIN;
   }
 
   if (process.env.KARMA_WEB_TEST_MODE) {

@@ -1,18 +1,17 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
 
 import * as path from 'path';
-import * as ts from 'typescript'; // used as value and is provided at runtime
-import {AstResult} from './common';
+import * as ts from 'typescript';  // used as value and is provided at runtime
+
 import {locateSymbols} from './locate_symbol';
-import {getPropertyAssignmentFromValue, isClassDecoratorProperty} from './template';
-import {Span} from './types';
-import {findTightestNode} from './utils';
+import {findTightestNode, getClassDeclFromDecoratorProp, getPropertyAssignmentFromValue} from './ts_utils';
+import {AstResult, Span} from './types';
 
 /**
  * Convert Angular Span to TypeScript TextSpan. Angular Span has 'start' and
@@ -39,6 +38,7 @@ export function getDefinitionAndBoundSpan(
     return;
   }
 
+  const seen = new Set<string>();
   const definitions: ts.DefinitionInfo[] = [];
   for (const symbolInfo of symbols) {
     const {symbol} = symbolInfo;
@@ -53,16 +53,28 @@ export function getDefinitionAndBoundSpan(
     const containerKind =
         container ? container.kind as ts.ScriptElementKind : ts.ScriptElementKind.unknown;
     const containerName = container ? container.name : '';
-    definitions.push(...locations.map((location) => {
-      return {
+
+    for (const {fileName, span} of locations) {
+      const textSpan = ngSpanToTsTextSpan(span);
+      // In cases like two-way bindings, a request for the definitions of an expression may return
+      // two of the same definition:
+      //    [(ngModel)]="prop"
+      //                 ^^^^  -- one definition for the property binding, one for the event binding
+      // To prune duplicate definitions, tag definitions with unique location signatures and ignore
+      // definitions whose locations have already been seen.
+      const signature = `${textSpan.start}:${textSpan.length}@${fileName}`;
+      if (seen.has(signature)) continue;
+
+      definitions.push({
         kind: kind as ts.ScriptElementKind,
         name,
         containerKind,
         containerName,
-        textSpan: ngSpanToTsTextSpan(location.span),
-        fileName: location.fileName,
-      };
-    }));
+        textSpan: ngSpanToTsTextSpan(span),
+        fileName: fileName,
+      });
+      seen.add(signature);
+    }
   }
 
   return {
@@ -108,11 +120,11 @@ function getUrlFromProperty(
   // `styleUrls`'s property assignment can be found from the array (parent) node.
   //
   // First search for `templateUrl`.
-  let asgn = getPropertyAssignmentFromValue(urlNode);
-  if (!asgn || asgn.name.getText() !== 'templateUrl') {
+  let asgn = getPropertyAssignmentFromValue(urlNode, 'templateUrl');
+  if (!asgn) {
     // `templateUrl` assignment not found; search for `styleUrls` array assignment.
-    asgn = getPropertyAssignmentFromValue(urlNode.parent);
-    if (!asgn || asgn.name.getText() !== 'styleUrls') {
+    asgn = getPropertyAssignmentFromValue(urlNode.parent, 'styleUrls');
+    if (!asgn) {
       // Nothing found, bail.
       return;
     }
@@ -120,7 +132,9 @@ function getUrlFromProperty(
 
   // If the property assignment is not a property of a class decorator, don't generate definitions
   // for it.
-  if (!isClassDecoratorProperty(asgn)) return;
+  if (!getClassDeclFromDecoratorProp(asgn)) {
+    return;
+  }
 
   const sf = urlNode.getSourceFile();
   // Extract url path specified by the url node, which is relative to the TypeScript source file

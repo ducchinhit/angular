@@ -5,8 +5,8 @@ import { Component, OnInit } from '@angular/core';
 import { Hero } from '../hero';
 // #docregion hero-service-import
 import { HeroService } from '../hero.service';
-import { MessageService } from '../message.service';
 // #enddocregion hero-service-import
+import { MessageService } from '../message.service';
 
 @Component({
   selector: 'app-heroes',
@@ -33,7 +33,7 @@ export class HeroesComponent implements OnInit {
 
   onSelect(hero: Hero): void {
     this.selectedHero = hero;
-    this.messageService.add(`HeroService: Selected hero id=${hero.id}`);
+    this.messageService.add(`HeroesComponent: Selected hero id=${hero.id}`);
   }
 
   // #docregion getHeroes

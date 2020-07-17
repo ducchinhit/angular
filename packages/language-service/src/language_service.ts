@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Copyright Google LLC All Rights Reserved.
  *
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
@@ -10,7 +10,7 @@ import * as tss from 'typescript/lib/tsserverlibrary';
 
 import {getTemplateCompletions} from './completions';
 import {getDefinitionAndBoundSpan, getTsDefinitionAndBoundSpan} from './definitions';
-import {getDeclarationDiagnostics, getTemplateDiagnostics, ngDiagnosticToTsDiagnostic, uniqueBySpan} from './diagnostics';
+import {getDeclarationDiagnostics, getTemplateDiagnostics, ngDiagnosticToTsDiagnostic} from './diagnostics';
 import {getTemplateHover, getTsHover} from './hover';
 import * as ng from './types';
 import {TypeScriptServiceHost} from './typescript_host';
@@ -29,28 +29,27 @@ class LanguageServiceImpl implements ng.LanguageService {
 
   getSemanticDiagnostics(fileName: string): tss.Diagnostic[] {
     const analyzedModules = this.host.getAnalyzedModules();  // same role as 'synchronizeHostData'
-    const results: ng.Diagnostic[] = [];
-    const templates = this.host.getTemplates(fileName);
+    const ngDiagnostics: ng.Diagnostic[] = [];
 
+    const templates = this.host.getTemplates(fileName);
     for (const template of templates) {
       const ast = this.host.getTemplateAst(template);
       if (ast) {
-        results.push(...getTemplateDiagnostics(ast));
+        ngDiagnostics.push(...getTemplateDiagnostics(ast));
       }
     }
 
     const declarations = this.host.getDeclarations(fileName);
-    if (declarations && declarations.length) {
-      results.push(...getDeclarationDiagnostics(declarations, analyzedModules, this.host));
-    }
+    ngDiagnostics.push(...getDeclarationDiagnostics(declarations, analyzedModules, this.host));
 
     const sourceFile = fileName.endsWith('.ts') ? this.host.getSourceFile(fileName) : undefined;
-    return uniqueBySpan(results).map(d => ngDiagnosticToTsDiagnostic(d, sourceFile));
+    const tsDiagnostics = ngDiagnostics.map(d => ngDiagnosticToTsDiagnostic(d, sourceFile));
+    return [...tss.sortAndDeduplicateDiagnostics(tsDiagnostics)];
   }
 
   getCompletionsAtPosition(
       fileName: string, position: number,
-      options?: tss.GetCompletionsAtPositionOptions): tss.CompletionInfo|undefined {
+      _options?: tss.GetCompletionsAtPositionOptions): tss.CompletionInfo|undefined {
     this.host.getAnalyzedModules();  // same role as 'synchronizeHostData'
     const ast = this.host.getTemplateAstAtPosition(fileName, position);
     if (!ast) {
@@ -98,5 +97,18 @@ class LanguageServiceImpl implements ng.LanguageService {
     // directive belongs to.
     const declarations = this.host.getDeclarations(fileName);
     return getTsHover(position, declarations, analyzedModules);
+  }
+
+  getReferencesAtPosition(fileName: string, position: number): tss.ReferenceEntry[]|undefined {
+    const defAndSpan = this.getDefinitionAndBoundSpan(fileName, position);
+    if (!defAndSpan?.definitions) {
+      return;
+    }
+    const {definitions} = defAndSpan;
+    const tsDef = definitions.find(def => def.fileName.endsWith('.ts'));
+    if (!tsDef) {
+      return;
+    }
+    return this.host.tsLS.getReferencesAtPosition(tsDef.fileName, tsDef.textSpan.start);
   }
 }
